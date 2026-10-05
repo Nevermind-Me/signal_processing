@@ -1,0 +1,13 @@
+[package]
+name = "signal_processing"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cpal = "0.18.2"
+crossterm = "0.29.0"
+ctrlc = "3.5.2"
+ratatui = "0.30.2"
+realfft = "3.5.0"
+ringbuf = "0.5.2"
+rustfft = "6.4.1"
