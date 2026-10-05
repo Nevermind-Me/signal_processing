@@ -27,7 +27,6 @@ pub struct Spectroscope {
 /* TODO:
  * - die ganzen render_..._chart refactoren als class function mit self und dann auch umbennenen
  * als render_chart ez möglich
- * - helper pop up updaten
  */
 
 impl Spectroscope {
@@ -46,11 +45,9 @@ impl Spectroscope {
 
     pub fn header(&self) -> String {
         format!(
-            "resolution: {:.2}Hz, window: [{}], log_x: [{}], log_y: [{}]",
+            "resolution: {:.2}Hz, window: [{}]",
             self.sample_rate as f64 / self.sample_len as f64,
-            if self.window { "X" } else { " " },
-            if self.log_x { "X" } else { " " },
-            if self.log_y { "X" } else { " " }
+            if self.window { "X" } else { " " }
         )
     }
 
@@ -63,10 +60,10 @@ impl Spectroscope {
 
         match code {
             KeyCode::Char('q') => return true, // Signal to quit
-            KeyCode::Char('w') => self.window = self.window ^ true,
-            KeyCode::Char('y') => self.log_y = self.log_y ^ true,
-            KeyCode::Char('x') => self.log_x = self.log_x ^ true,
-            KeyCode::Char('m') => self.phase = self.phase ^ true,
+            KeyCode::Char('w') => self.window = !self.window,
+            KeyCode::Char('y') => self.log_y = !self.log_y,
+            KeyCode::Char('x') => self.log_x = !self.log_x,
+            KeyCode::Char('m') => self.phase = !self.phase,
             KeyCode::Char('g') => update_value_i(&mut self.grid_lines, false, 1, 1.0, 2..16),
             KeyCode::Char('G') => update_value_i(&mut self.grid_lines, true, 1, 1.0, 2..16),
             KeyCode::Char('p') => update_value_i(
