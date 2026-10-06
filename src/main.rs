@@ -55,7 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut spec_scope = Spectroscope::new(sample_rate as u32);
 
     let mut mode: u8 = 0;
-    let mut show_help = false; // <-- 1. Track popup visibility state
+    let mut show_help = false;
 
     ratatui::run(|terminal| {
         loop {
@@ -88,11 +88,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .gray(),
                         ]);
                         frame.render_widget(title.centered(), top);
-                        render_oscilloscope_chart(
+                        osci_scope.render_chart(
                             frame,
                             main,
                             &vec![&ui_buffer, &ui_buffer_left, &ui_buffer_right],
-                            &osci_scope,
                             sample_rate,
                         );
                     }
@@ -106,11 +105,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .gray(),
                         ]);
                         frame.render_widget(title.centered(), top);
-                        render_vectorscope_chart(
+                        vec_scope.render_chart(
                             frame,
                             main,
                             &vec![&ui_buffer_left, &ui_buffer_right],
-                            &vec_scope,
                         );
                     }
                     2 => {
@@ -123,17 +121,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .gray(),
                         ]);
                         frame.render_widget(title.centered(), top);
-                        render_spectroscope_chart(
+                        spec_scope.render_chart(
                             frame,
                             main,
                             &vec![&ui_buffer, &ui_buffer_left, &ui_buffer_right],
-                            &mut spec_scope,
                         );
                     }
                     _ => {}
                 }
 
-                // --- 2. Render Overlay Popup if active ---
+                // --- Render Overlay Popup if active ---
                 if show_help {
                     let popup_area = centered_rect(frame.area(), 50, 60);
 
@@ -192,7 +189,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             })?;
 
-            // --- 3. Key Polling & Handling ---
+            // --- Key Polling & Handling ---
             if event::poll(Duration::from_millis(12))? {
                 if let Event::Key(key) = event::read()? {
                     if key.kind == KeyEventKind::Press {

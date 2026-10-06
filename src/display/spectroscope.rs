@@ -24,11 +24,6 @@ pub struct Spectroscope {
     phase: bool,
 }
 
-/* TODO:
- * - die ganzen render_..._chart refactoren als class function mit self und dann auch umbennenen
- * als render_chart ez möglich
- */
-
 impl Spectroscope {
     pub fn new(sample_rate: u32) -> Self {
         Self {
@@ -105,6 +100,14 @@ impl Spectroscope {
         }
         false
     }
+
+    pub fn render_chart(&mut self, frame: &mut Frame, area: Rect, buffer_vec: &Vec<&ChartBuffer>) {
+        if self.phase {
+            create_phase_shift_chart(frame, area, buffer_vec[1], buffer_vec[2], self);
+        } else {
+            create_spectroscope_chart(frame, area, buffer_vec[0], self);
+        }
+    }
 }
 
 fn update_value_i(
@@ -140,19 +143,6 @@ fn phase(z: Complex<f64>) -> f64 {
 fn phase_diff(phase_l: f64, phase_r: f64) -> f64 {
     // Computes difference wrapped into the range [-PI, +PI]
     f64::atan2((phase_l - phase_r).sin(), (phase_l - phase_r).cos())
-}
-
-pub fn render_spectroscope_chart(
-    frame: &mut Frame,
-    area: Rect,
-    buffer_vec: &Vec<&ChartBuffer>,
-    scope: &mut Spectroscope,
-) {
-    if scope.phase {
-        create_phase_shift_chart(frame, area, buffer_vec[1], buffer_vec[2], scope);
-    } else {
-        create_spectroscope_chart(frame, area, buffer_vec[0], scope);
-    }
 }
 
 fn create_phase_shift_chart(
@@ -305,7 +295,8 @@ fn create_spectroscope_chart(
         .enumerate()
         .map(|(i, &z)| {
             let freq = if scope.log_x {
-                ((i + 1) as f64 * resolution).ln() // resolution capped to a minimum of 1 Hz
+                ((i + 1) as f64 * resolution).ln() // resolution capped to a minimum of 1 Hz ->
+            // ln(1) = 0
             } else {
                 (i + 1) as f64 * resolution
             };

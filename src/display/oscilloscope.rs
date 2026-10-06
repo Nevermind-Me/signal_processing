@@ -86,6 +86,231 @@ impl Oscilloscope {
         }
         false
     }
+
+    pub fn render_chart(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        buffer_vec: &Vec<&ChartBuffer>,
+        sample_rate: f64,
+    ) {
+        let slice_combined = buffer_vec[0].as_slice();
+        let slice_left = buffer_vec[1].as_slice();
+        let slice_right = buffer_vec[2].as_slice();
+
+        let capacity_f64 = buffer_vec[0].capacity() as f64;
+
+        let mut trigger_offset = 0;
+        let depth = self.depth.max(1) as usize;
+
+        if self.triggering {
+            let slice;
+            if self.mode == 0 {
+                slice = slice_combined;
+            } else if (self.left_trigger && self.mode == 1) || self.mode == 2 {
+                slice = slice_left;
+            } else {
+                slice = slice_right;
+            }
+            for i in 0..slice.len() {
+                if triggered(slice, i, self.threshold, depth, self.falling_edge) {
+                    break;
+                }
+                trigger_offset += 1;
+            }
+        }
+
+        let mut min_sample = 0.0f64;
+        let mut max_sample = 0.0f64;
+
+        let mut datasets = Vec::new();
+
+        let zero_line = vec![(0.0, 0.0), (capacity_f64, 0.0)];
+        datasets.push(
+            Dataset::default()
+                .marker(Marker::Braille)
+                .graph_type(GraphType::Line)
+                .style(Color::DarkGray)
+                .data(&zero_line),
+        );
+
+        let trigger_pt = vec![(0.0, self.threshold), (capacity_f64, self.threshold)];
+        if self.triggering {
+            datasets.push(
+                Dataset::default()
+                    .name("T")
+                    .marker(Marker::Braille)
+                    .graph_type(GraphType::Line)
+                    .style(Color::Yellow)
+                    .data(&trigger_pt),
+            );
+        }
+
+        let depth_line = vec![(depth as f64, -1.5), (depth as f64, 1.5)];
+        if depth > 1 && self.triggering {
+            datasets.push(
+                Dataset::default()
+                    .marker(Marker::Braille)
+                    .graph_type(GraphType::Line)
+                    .style(Color::Magenta)
+                    .data(&depth_line),
+            );
+        }
+
+        let signal_points: Vec<(f64, f64)>;
+        let signal_points_left: Vec<(f64, f64)>;
+        let signal_points_right: Vec<(f64, f64)>;
+        match self.mode {
+            0 => {
+                signal_points = slice_combined
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &sample)| {
+                        if sample < min_sample {
+                            min_sample = sample;
+                        }
+                        if sample > max_sample {
+                            max_sample = sample;
+                        }
+                        (i, sample)
+                    })
+                    .filter(|&(i, _)| i >= trigger_offset)
+                    .map(|(i, sample)| ((i - trigger_offset) as f64, sample))
+                    .collect();
+                datasets.push(
+                    Dataset::default()
+                        .name("Channel 0 & 1")
+                        .marker(Marker::Braille)
+                        .graph_type(GraphType::Line)
+                        .style(Color::Cyan)
+                        .data(&signal_points),
+                );
+            }
+            1 => {
+                signal_points_left = slice_left
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &sample)| {
+                        if sample < min_sample {
+                            min_sample = sample;
+                        }
+                        if sample > max_sample {
+                            max_sample = sample;
+                        }
+                        (i, sample)
+                    })
+                    .filter(|&(i, _)| i >= trigger_offset)
+                    .map(|(i, sample)| ((i - trigger_offset) as f64, sample))
+                    .collect();
+                signal_points_right = slice_right
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &sample)| {
+                        if sample < min_sample {
+                            min_sample = sample;
+                        }
+                        if sample > max_sample {
+                            max_sample = sample;
+                        }
+                        (i, sample)
+                    })
+                    .filter(|&(i, _)| i >= trigger_offset)
+                    .map(|(i, sample)| ((i - trigger_offset) as f64, sample))
+                    .collect();
+                datasets.push(
+                    Dataset::default()
+                        .name("Channel 0 (Left)")
+                        .marker(Marker::Braille)
+                        .graph_type(GraphType::Line)
+                        .style(Color::Blue)
+                        .data(&signal_points_left),
+                );
+                datasets.push(
+                    Dataset::default()
+                        .name("Channel 1 (Right)")
+                        .marker(Marker::Braille)
+                        .graph_type(GraphType::Line)
+                        .style(Color::Red)
+                        .data(&signal_points_right),
+                );
+            }
+            2 => {
+                signal_points = slice_left
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &sample)| {
+                        if sample < min_sample {
+                            min_sample = sample;
+                        }
+                        if sample > max_sample {
+                            max_sample = sample;
+                        }
+                        (i, sample)
+                    })
+                    .filter(|&(i, _)| i >= trigger_offset)
+                    .map(|(i, sample)| ((i - trigger_offset) as f64, sample))
+                    .collect();
+                datasets.push(
+                    Dataset::default()
+                        .name("Channel 0 (Left)")
+                        .marker(Marker::Braille)
+                        .graph_type(GraphType::Line)
+                        .style(Color::Blue)
+                        .data(&signal_points),
+                );
+            }
+            3 => {
+                signal_points = slice_right
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &sample)| {
+                        if sample < min_sample {
+                            min_sample = sample;
+                        }
+                        if sample > max_sample {
+                            max_sample = sample;
+                        }
+                        (i, sample)
+                    })
+                    .filter(|&(i, _)| i >= trigger_offset)
+                    .map(|(i, sample)| ((i - trigger_offset) as f64, sample))
+                    .collect();
+                datasets.push(
+                    Dataset::default()
+                        .name("Channel 1 (Right)")
+                        .marker(Marker::Braille)
+                        .graph_type(GraphType::Line)
+                        .style(Color::Red)
+                        .data(&signal_points),
+                );
+            }
+            _ => {}
+        }
+
+        let peak_bar = vec![(0.0, min_sample), (0.0, max_sample)];
+        if self.peaks {
+            datasets.push(
+                Dataset::default()
+                    .marker(Marker::Dot)
+                    .graph_type(GraphType::Scatter)
+                    .style(Color::Magenta)
+                    .data(&peak_bar),
+            );
+        }
+
+        let x_axis = Axis::default()
+            .title("Time".blue())
+            .bounds([0.0, capacity_f64])
+            .labels([format!("-{:.2}s", capacity_f64 / sample_rate), "0s".into()]);
+
+        let y_axis = Axis::default()
+            .title("Amplitude".blue())
+            .bounds([-1.5, 1.5])
+            .labels(["-1.5", "0.0", "1.5"]);
+
+        let chart = Chart::new(datasets).x_axis(x_axis).y_axis(y_axis);
+        frame.render_widget(chart, area);
+    }
 }
 
 fn update_value_f(val: &mut f64, delta: f64, mag: f64, range: std::ops::Range<f64>) {
@@ -127,237 +352,4 @@ fn triggered(data: &[f64], index: usize, threshold: f64, depth: usize, falling_e
     } else {
         false
     }
-}
-
-pub fn render_oscilloscope_chart(
-    frame: &mut Frame,
-    area: Rect,
-    buffer_vec: &Vec<&ChartBuffer>,
-    scope: &Oscilloscope,
-    sample_rate: f64,
-) {
-    let slice_combined = buffer_vec[0].as_slice();
-    let slice_left = buffer_vec[1].as_slice();
-    let slice_right = buffer_vec[2].as_slice();
-
-    let capacity_f64 = buffer_vec[0].capacity() as f64;
-
-    // --- 1. Compute Trigger Offset ---
-    let mut trigger_offset = 0;
-    let depth = scope.depth.max(1) as usize;
-
-    if scope.triggering {
-        let slice;
-        if scope.mode == 0 {
-            slice = slice_combined;
-        } else if (scope.left_trigger && scope.mode == 1) || scope.mode == 2 {
-            slice = slice_left;
-        } else {
-            slice = slice_right;
-        }
-        for i in 0..slice.len() {
-            if triggered(slice, i, scope.threshold, depth, scope.falling_edge) {
-                break;
-            }
-            trigger_offset += 1;
-        }
-    }
-
-    // --- 2. Calculate Waveform Points & Peaks ---
-    let mut min_sample = 0.0f64;
-    let mut max_sample = 0.0f64;
-
-    // --- 3. Build Datasets ---
-    let mut datasets = Vec::new();
-
-    // Layer A: Zero Reference Baseline (Y = 0)
-    let zero_line = vec![(0.0, 0.0), (capacity_f64, 0.0)];
-    datasets.push(
-        Dataset::default()
-            .marker(Marker::Braille)
-            .graph_type(GraphType::Line)
-            .style(Color::DarkGray)
-            .data(&zero_line),
-    );
-
-    // Layer D: Trigger Threshold Marker ("T")
-    let trigger_pt = vec![(0.0, scope.threshold), (capacity_f64, scope.threshold)];
-    if scope.triggering {
-        datasets.push(
-            Dataset::default()
-                .name("T")
-                .marker(Marker::Braille)
-                .graph_type(GraphType::Line)
-                .style(Color::Yellow)
-                .data(&trigger_pt),
-        );
-    }
-
-    let depth_line = vec![(depth as f64, -1.5), (depth as f64, 1.5)];
-    if depth > 1 && scope.triggering {
-        datasets.push(
-            Dataset::default()
-                .marker(Marker::Braille)
-                .graph_type(GraphType::Line)
-                .style(Color::Magenta)
-                .data(&depth_line),
-        );
-    }
-
-    let signal_points: Vec<(f64, f64)>;
-    let signal_points_left: Vec<(f64, f64)>;
-    let signal_points_right: Vec<(f64, f64)>;
-    // Layer B: Main Signal Waveform
-    match scope.mode {
-        0 => {
-            signal_points = slice_combined
-                .iter()
-                .enumerate()
-                .map(|(i, &sample)| {
-                    if sample < min_sample {
-                        min_sample = sample;
-                    }
-                    if sample > max_sample {
-                        max_sample = sample;
-                    }
-                    (i, sample)
-                })
-                .filter(|&(i, _)| i >= trigger_offset)
-                .map(|(i, sample)| ((i - trigger_offset) as f64, sample))
-                .collect();
-            datasets.push(
-                Dataset::default()
-                    .name("Channel 0 & 1")
-                    .marker(Marker::Braille)
-                    .graph_type(GraphType::Line)
-                    .style(Color::Cyan)
-                    .data(&signal_points),
-            );
-        }
-        1 => {
-            signal_points_left = slice_left
-                .iter()
-                .enumerate()
-                .map(|(i, &sample)| {
-                    if sample < min_sample {
-                        min_sample = sample;
-                    }
-                    if sample > max_sample {
-                        max_sample = sample;
-                    }
-                    (i, sample)
-                })
-                .filter(|&(i, _)| i >= trigger_offset)
-                .map(|(i, sample)| ((i - trigger_offset) as f64, sample))
-                .collect();
-            signal_points_right = slice_right
-                .iter()
-                .enumerate()
-                .map(|(i, &sample)| {
-                    if sample < min_sample {
-                        min_sample = sample;
-                    }
-                    if sample > max_sample {
-                        max_sample = sample;
-                    }
-                    (i, sample)
-                })
-                .filter(|&(i, _)| i >= trigger_offset)
-                .map(|(i, sample)| ((i - trigger_offset) as f64, sample))
-                .collect();
-            datasets.push(
-                Dataset::default()
-                    .name("Channel 0 (Left)")
-                    .marker(Marker::Braille)
-                    .graph_type(GraphType::Line)
-                    .style(Color::Blue)
-                    .data(&signal_points_left),
-            );
-            datasets.push(
-                Dataset::default()
-                    .name("Channel 1 (Right)")
-                    .marker(Marker::Braille)
-                    .graph_type(GraphType::Line)
-                    .style(Color::Red)
-                    .data(&signal_points_right),
-            );
-        }
-        2 => {
-            signal_points = slice_left
-                .iter()
-                .enumerate()
-                .map(|(i, &sample)| {
-                    if sample < min_sample {
-                        min_sample = sample;
-                    }
-                    if sample > max_sample {
-                        max_sample = sample;
-                    }
-                    (i, sample)
-                })
-                .filter(|&(i, _)| i >= trigger_offset)
-                .map(|(i, sample)| ((i - trigger_offset) as f64, sample))
-                .collect();
-            datasets.push(
-                Dataset::default()
-                    .name("Channel 0 (Left)")
-                    .marker(Marker::Braille)
-                    .graph_type(GraphType::Line)
-                    .style(Color::Blue)
-                    .data(&signal_points),
-            );
-        }
-        3 => {
-            signal_points = slice_right
-                .iter()
-                .enumerate()
-                .map(|(i, &sample)| {
-                    if sample < min_sample {
-                        min_sample = sample;
-                    }
-                    if sample > max_sample {
-                        max_sample = sample;
-                    }
-                    (i, sample)
-                })
-                .filter(|&(i, _)| i >= trigger_offset)
-                .map(|(i, sample)| ((i - trigger_offset) as f64, sample))
-                .collect();
-            datasets.push(
-                Dataset::default()
-                    .name("Channel 1 (Right)")
-                    .marker(Marker::Braille)
-                    .graph_type(GraphType::Line)
-                    .style(Color::Red)
-                    .data(&signal_points),
-            );
-        }
-        _ => {}
-    }
-
-    // Layer C: Peak High/Low Bar at X = 0
-    let peak_bar = vec![(0.0, min_sample), (0.0, max_sample)];
-    if scope.peaks {
-        datasets.push(
-            Dataset::default()
-                .marker(Marker::Dot)
-                .graph_type(GraphType::Scatter)
-                .style(Color::Magenta)
-                .data(&peak_bar),
-        );
-    }
-
-    // --- 4. Axes & Rendering ---
-    let x_axis = Axis::default()
-        .title("Time".blue())
-        .bounds([0.0, capacity_f64])
-        .labels([format!("-{:.2}s", capacity_f64 / sample_rate), "0s".into()]);
-
-    let y_axis = Axis::default()
-        .title("Amplitude".blue())
-        .bounds([-1.5, 1.5])
-        .labels(["-1.5", "0.0", "1.5"]);
-
-    let chart = Chart::new(datasets).x_axis(x_axis).y_axis(y_axis);
-    frame.render_widget(chart, area);
 }
