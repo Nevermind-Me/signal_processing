@@ -1,5 +1,5 @@
+use std::format;
 use std::process::Command;
-use std::{format, println};
 
 pub struct VirtualAudioCable {
     original_sink: String,
@@ -8,11 +8,11 @@ pub struct VirtualAudioCable {
 
 impl VirtualAudioCable {
     pub fn create() -> Result<Self, Box<dyn std::error::Error>> {
-        // 1. Save original physical headphones/speakers sink name
+        // Save original physical headphones/speakers sink name
         let output = Command::new("pactl").arg("get-default-sink").output()?;
         let original_sink = String::from_utf8(output.stdout)?.trim().to_string();
 
-        // 2. Create the virtual sink
+        // Create the virtual sink
         let output = Command::new("pactl")
             .args([
                 "load-module",
@@ -23,7 +23,7 @@ impl VirtualAudioCable {
             .output()?;
         let module_id = String::from_utf8(output.stdout)?.trim().to_string();
 
-        // 3. Set system default sink to RustAudioSink (Firefox/YouTube outputs here)
+        // Set system default sink to RustAudioSink
         Command::new("pactl")
             .args(["set-default-sink", "RustAudioSink"])
             .status()?;
@@ -31,8 +31,6 @@ impl VirtualAudioCable {
         Command::new("pactl")
             .args(["set-default-source", "RustAudioSink.monitor"])
             .status()?;
-
-        println!("Created RustAudioSink. Original headphones: {original_sink}");
 
         Ok(Self {
             original_sink,
@@ -54,10 +52,6 @@ impl VirtualAudioCable {
                 let _ = Command::new("pactl")
                     .args(["move-sink-input", &id, &self.original_sink])
                     .status();
-                println!(
-                    "Routed Rust output stream -> Headphones ({})",
-                    self.original_sink
-                );
             }
         }
 
@@ -71,7 +65,6 @@ impl VirtualAudioCable {
                 let _ = Command::new("pactl")
                     .args(["move-source-output", &id, "RustAudioSink.monitor"])
                     .status();
-                println!("Routed Rust input stream -> RustAudioSink.monitor");
             }
         }
     }
@@ -80,7 +73,6 @@ impl VirtualAudioCable {
 // Restores original audio routing when the application exits
 impl Drop for VirtualAudioCable {
     fn drop(&mut self) {
-        println!("\nRestoring default sink and removing virtual audio cable...");
         let _ = Command::new("pactl")
             .args(["set-default-sink", &self.original_sink])
             .status();

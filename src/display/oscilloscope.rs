@@ -10,13 +10,14 @@ use ratatui::{
 use std::{format, vec};
 
 pub struct Oscilloscope {
-    pub triggering: bool,
-    pub left_trigger: bool,
-    pub falling_edge: bool,
-    pub threshold: f64,
-    pub depth: u32,
-    pub peaks: bool,
-    pub mode: u8,
+    triggering: bool,
+    left_trigger: bool,
+    falling_edge: bool,
+    threshold: f64,
+    depth: u32,
+    peaks: bool,
+    mode: u8,
+    scale: f64,
 }
 
 impl Default for Oscilloscope {
@@ -29,6 +30,7 @@ impl Default for Oscilloscope {
             depth: 1,
             peaks: true,
             mode: 0,
+            scale: 1.5,
         }
     }
 }
@@ -69,11 +71,22 @@ impl Oscilloscope {
             KeyCode::Char('t') => self.triggering = !self.triggering,
             KeyCode::Char('e') => self.falling_edge = !self.falling_edge,
             KeyCode::Char('p') => self.peaks = !self.peaks,
-            KeyCode::Up => {
-                // Scaled for normalized float audio bounds [-1.5, 1.5]
-                update_value_f(&mut self.threshold, 0.05, magnitude, -1.5..1.5)
-            }
-            KeyCode::Down => update_value_f(&mut self.threshold, -0.05, magnitude, -1.5..1.5),
+            KeyCode::Char('i') => update_value_f(&mut self.scale, 0.05, magnitude, 0.01..40.0),
+            KeyCode::Char('d') => update_value_f(&mut self.scale, -0.05, magnitude, 0.01..40.0),
+            KeyCode::Char('I') => update_value_f(&mut self.scale, 0.5, 1.0, 0.01..40.0),
+            KeyCode::Char('D') => update_value_f(&mut self.scale, -0.5, 1.0, 0.01..40.0),
+            KeyCode::Up => update_value_f(
+                &mut self.threshold,
+                0.05,
+                magnitude,
+                -self.scale..self.scale,
+            ),
+            KeyCode::Down => update_value_f(
+                &mut self.threshold,
+                -0.05,
+                magnitude,
+                -self.scale..self.scale,
+            ),
             KeyCode::Right => update_value_i(&mut self.depth, true, 1, magnitude, 1..65535),
             KeyCode::Left => update_value_i(&mut self.depth, false, 1, magnitude, 1..65535),
             KeyCode::Esc => {
@@ -305,8 +318,12 @@ impl Oscilloscope {
 
         let y_axis = Axis::default()
             .title("Amplitude".blue())
-            .bounds([-1.5, 1.5])
-            .labels(["-1.5", "0.0", "1.5"]);
+            .bounds([-self.scale, self.scale])
+            .labels([
+                format!("-{:.2}", self.scale),
+                "0.00".into(),
+                format!("{:.2}", self.scale),
+            ]);
 
         let chart = Chart::new(datasets).x_axis(x_axis).y_axis(y_axis);
         frame.render_widget(chart, area);

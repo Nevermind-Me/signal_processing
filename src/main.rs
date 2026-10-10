@@ -5,6 +5,7 @@ mod virtual_audio_sink;
 
 use audio_device_handling::*;
 use data_structure::*;
+use display::filter::*;
 use display::oscilloscope::*;
 use display::spectroscope::*;
 use display::vectorscope::*;
@@ -14,20 +15,22 @@ use ringbuf::traits::{Consumer, Producer, Split};
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 
+use arc_swap::ArcSwap;
+
 use std::time::Duration;
-use std::{format, println, vec};
+use std::{format, sync::Arc, vec};
 
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
 
+type FilterBox = Box<dyn Fn(f32) -> f32 + Send + Sync>;
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut audio_handle = AudioHandling::init_audio_handling()?;
     let sample_rate = audio_handle.sample_rate as f64;
     let capacity = audio_handle.sample_rate as usize;
-
-    println!("Number of Channels: {}", audio_handle.num_channels);
 
     let ring_buffer_left = HeapRb::<f64>::new(capacity);
     let (mut producer_left, mut consumer_left) = ring_buffer_left.split();
@@ -35,14 +38,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ring_buffer_right = HeapRb::<f64>::new(capacity);
     let (mut producer_right, mut consumer_right) = ring_buffer_right.split();
 
+    let filter_swap = Arc::new(ArcSwap::from_pointee(Box::new(|s| s) as FilterBox));
+    let filter_swap_clone = Arc::clone(&filter_swap);
+
     let func = move |s: f32, _i: usize| {
+        // possible to only filter left or right, but I don't think thats necessary or usefull
+        let current_filter = filter_swap_clone.load();
+        let filtered_s = current_filter(s);
         //_i = 0 is left channel and _i = 1 is right channel
         if _i == 0 {
-            let _ = producer_left.try_push(s as f64);
+            let _ = producer_left.try_push(filtered_s as f64);
         } else if _i == 1 {
-            let _ = producer_right.try_push(s as f64);
+            let _ = producer_right.try_push(filtered_s as f64);
         }
-        s
+        filtered_s
     };
 
     audio_handle.start_audio_streams(func)?;
@@ -53,9 +62,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut osci_scope = Oscilloscope::default();
     let mut vec_scope = Vectorscope::default();
     let mut spec_scope = Spectroscope::new(sample_rate as u32);
+    let mut fir_filter = FIR_Filter::new(sample_rate as u32, filter_swap);
 
     let mut mode: u8 = 0;
     let mut show_help = false;
+    let mut show_filter = false;
 
     ratatui::run(|terminal| {
         loop {
@@ -131,12 +142,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 // --- Render Overlay Popup if active ---
+                if show_filter {
+                    let popup_area = centered_rect(frame.area(), 95, 95);
+
+                    // Clear background cells underneath popup
+                    frame.render_widget(Clear, popup_area);
+                    fir_filter.render(frame, popup_area);
+                }
+
+                // --- Render Overlay Popup if active ---
                 if show_help {
-                    let popup_area = centered_rect(frame.area(), 50, 60);
+                    let popup_area = centered_rect(frame.area(), 50, 65);
 
                     // Clear background cells underneath popup
                     frame.render_widget(Clear, popup_area);
 
+                    // TODO: Update help text with the filter function
                     let help_text = vec![
                         Line::from(vec![Span::raw(" General Controls").bold().cyan()]),
                         Line::from("  h       : Toggle Help Overlay"),
@@ -153,6 +174,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Line::from("  p       : Toggle Peak Detection"),
                         Line::from("  m       : Change the Mode of the Oscilloscope"),
                         Line::from("  c       : Toggle Left / Right Trigger"),
+                        Line::from("  i  /  d : Increase / Decrease the y-Scale"),
                         Line::from("  Up / Dn : Adjust Threshold"),
                         Line::from("  <- / -> : Adjust Depth"),
                         Line::from(""),
@@ -196,10 +218,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         // Toggle or dismiss help overlay
                         if key.code == KeyCode::Char('h') {
                             show_help = !show_help;
+                        } else if key.code == KeyCode::Char('f') {
+                            show_filter = !show_filter;
                         } else if show_help {
                             // If popup is open, Esc closes it
                             if key.code == KeyCode::Esc {
                                 show_help = false;
+                            }
+                        } else if show_filter {
+                            // If popup is open, Esc closes it
+                            if key.code == KeyCode::Esc {
+                                show_filter = false;
+                            } else {
+                                fir_filter.handle_key(key.code, key.modifiers);
                             }
                         } else if key.code == KeyCode::Char('n') {
                             mode = (mode + 1) % 3;

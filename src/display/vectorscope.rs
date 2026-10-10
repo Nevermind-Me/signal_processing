@@ -10,7 +10,7 @@ use ratatui::{
 use std::{format, vec};
 
 pub struct Vectorscope {
-    pub gain: f64,
+    gain: f64,
 }
 
 impl Default for Vectorscope {
@@ -79,7 +79,7 @@ impl Vectorscope {
             .labels(["-1.5", "0.0", "1.5"]);
 
         let y_axis = Axis::default()
-            .title("Channel 1 (Right)".blue())
+            .title("Channel 1 (Right)".red())
             .bounds([-1.5, 1.5])
             .labels(["-1.5", "0.0", "1.5"]);
 
