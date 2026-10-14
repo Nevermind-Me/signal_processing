@@ -62,7 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut osci_scope = Oscilloscope::default();
     let mut vec_scope = Vectorscope::default();
     let mut spec_scope = Spectroscope::new(sample_rate as u32);
-    let mut fir_filter = FIR_Filter::new(sample_rate as u32, filter_swap);
+    let mut filter = Filter::new(sample_rate as u32, filter_swap);
 
     let mut mode: u8 = 0;
     let mut show_help = false;
@@ -147,7 +147,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     // Clear background cells underneath popup
                     frame.render_widget(Clear, popup_area);
-                    fir_filter.render(frame, popup_area);
+                    filter.render(frame, popup_area);
                 }
 
                 // --- Render Overlay Popup if active ---
@@ -230,7 +230,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             if key.code == KeyCode::Esc {
                                 show_filter = false;
                             } else {
-                                fir_filter.handle_key(key.code, key.modifiers);
+                                filter.handle_key(key.code, key.modifiers);
                             }
                         } else if key.code == KeyCode::Char('n') {
                             mode = (mode + 1) % 3;
